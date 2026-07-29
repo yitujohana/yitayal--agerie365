@@ -1,11 +1,14 @@
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 WORKDIR /src
 
-COPY *.csproj ./
-RUN dotnet restore
+# Copy the API project file specifically
+COPY Agerie365.API/Agerie365.API.csproj Agerie365.API/
+RUN dotnet restore Agerie365.API/Agerie365.API.csproj
 
-COPY . ./
-RUN dotnet publish -c Release -o /app/publish
+# Copy everything else
+COPY . .
+WORKDIR /src/Agerie365.API
+RUN dotnet publish Agerie365.API.csproj -c Release -o /app/publish
 
 FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS final
 WORKDIR /app
