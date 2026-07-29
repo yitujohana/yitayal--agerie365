@@ -1,43 +1,13 @@
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 WORKDIR /src
 
-COPY ["Agerie365.API/Agerie365.API.csproj", "Agerie365.API/"]
-RUN dotnet restore "Agerie365.API/Agerie365.API.csproj"
+# Copy all project files and restore dependencies
+COPY *.csproj ./
+RUN dotnet restore
 
-COPY . .
-WORKDIR "/src/Agerie365.API"
-RUN dotnet publish "Agerie365.API.csproj" -c Release -o /app/publish
-
-FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS final
-WORKDIR /app
-COPY --from=build /app/publish .
-ENV PORT=8080
-EXPOSE 8080
-ENTRYPOINT ["dotnet", "Agerie365.API.dll"]FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
-WORKDIR /src
-
-COPY ["Agerie365.API/Agerie365.API.csproj", "Agerie365.API/"]
-RUN dotnet restore "Agerie365.API/Agerie365.API.csproj"
-
-COPY . .
-WORKDIR "/src/Agerie365.API"
-RUN dotnet publish "Agerie365.API.csproj" -c Release -o /app/publish
-
-FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS final
-WORKDIR /app
-COPY --from=build /app/publish .
-ENV PORT=8080
-EXPOSE 8080
-ENTRYPOINT ["dotnet", "Agerie365.API.dll"]
-FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
-WORKDIR /src
-
-COPY ["Agerie365.API/Agerie365.API.csproj", "Agerie365.API/"]
-RUN dotnet restore "Agerie365.API/Agerie365.API.csproj"
-
-COPY . .
-WORKDIR "/src/Agerie365.API"
-RUN dotnet publish "Agerie365.API.csproj" -c Release -o /app/publish
+# Copy the remaining code and build
+COPY . ./
+RUN dotnet publish -c Release -o /app/publish
 
 FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS final
 WORKDIR /app
