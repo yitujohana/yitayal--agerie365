@@ -1,16 +1,16 @@
-using Google.Apis.Services;
-using Google.Apis.YouTube.v3;
+using System.Text.Json;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
+// Services
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+builder.Services.AddHttpClient();
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
+// Configure Pipeline
 app.UseSwagger();
 app.UseSwaggerUI();
 
@@ -20,9 +20,9 @@ app.MapControllers();
 app.MapGet("/", () => "Agerie365 API is Running Successfully!");
 
 // የ YouTube ቪዲዮዎችን የሚያመጣ Endpoint
-app.MapGet("/api/youtube/latest-videos", async (string? channelId) =>
+app.MapGet("/api/youtube/latest-videos", async (IHttpClientFactory clientFactory, string? channelId) =>
 {
-    var apiKey = "AIzaSyCDT2EHILkNxQ5F_EK4RAAMd2lsD1l1hx4"; // ቅድም ያገኘኸው API Key
+    var apiKey = "AIzaSyCDT2EHILkNxQ5F_EK4RAAMd2lsD1l1hx4";
     
     if (string.IsNullOrEmpty(channelId))
     {
@@ -31,28 +31,44 @@ app.MapGet("/api/youtube/latest-videos", async (string? channelId) =>
 
     try
     {
-        var youtubeService = new YouTubeService(new BaseClientService.Initializer()
+        var client = clientFactory.CreateClient();
+        var url = $"https://www.googleapis.com/youtube/v3/search?key={apiKey}&channelId={channelId}&part=snippet,id&order=date&maxResults=5&type=video";
+
+        var response = await client.GetAsync(url);
+        
+        if (!response.IsSuccessStatusCode)
         {
-            ApiKey = apiKey,
-            ApplicationName = "Agerie365"
-        });
+            var errorContent = await response.Content.ReadAsStringAsync();
+            return Results.Problem($"የ YouTube API ስህተት: {errorContent}");
+        }
 
-        var searchRequest = youtubeService.Search.List("snippet");
-        searchRequest.ChannelId = channelId;
-        searchRequest.MaxResults = 5;
-        searchRequest.Order = SearchResource.ListRequest.OrderEnum.Date;
-        searchRequest.Type = "video";
-
-        var searchResponse = await searchRequest.ExecuteAsync();
-
-        var videos = searchResponse.Items.Select(item => new
+        var jsonString = await response.Content.ReadAsStringAsync();
+        using var doc = JsonDocument.Parse(jsonString);
+        
+        if (!doc.RootElement.TryGetProperty("items", out var items))
         {
-            Title = item.Snippet.Title,
-            Description = item.Snippet.Description,
-            Thumbnail = item.Snippet.Thumbnails.Medium?.Url,
-            VideoId = item.Id.VideoId,
-            PublishedAt = item.Snippet.PublishedAt
-        });
+            return Results.Ok(new List<object>());
+        }
+
+        var videos = new List<object>();
+        foreach (var item in items.EnumerateArray())
+        {
+            if (!item.TryGetProperty("snippet", out var snippet)) continue;
+            if (!item.TryGetProperty("id", out var id)) continue;
+
+            string? videoId = id.TryGetProperty("videoId", out var vId) ? vId.GetString() : null;
+
+            videos.Add(new
+            {
+                Title = snippet.TryGetProperty("title", out var title) ? title.GetString() : "",
+                Description = snippet.TryGetProperty("description", out var desc) ? desc.GetString() : "",
+                Thumbnail = snippet.TryGetProperty("thumbnails", out var thumbs) && 
+                            thumbs.TryGetProperty("medium", out var med) && 
+                            med.TryGetProperty("url", out var urlElem) ? urlElem.GetString() : "",
+                VideoId = videoId,
+                PublishedAt = snippet.TryGetProperty("publishedAt", out var pub) ? pub.GetString() : ""
+            });
+        }
 
         return Results.Ok(videos);
     }
